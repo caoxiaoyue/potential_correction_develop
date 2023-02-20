@@ -1,0 +1,69 @@
+{
+    "type": "autolens.lens.ray_tracing.Tracer",
+    "planes": [
+        {
+            "type": "autogalaxy.plane.plane.Plane",
+            "galaxies": [
+                {
+                    "mass": {
+                        "type": "autogalaxy.profiles.mass_profiles.total_mass_profiles.EllIsothermal",
+                        "centre": [
+                            0.0,
+                            0.0
+                        ],
+                        "elliptical_comps": [
+                            0.05263157894736841,
+                            3.2227547345982974e-18
+                        ],
+                        "einstein_radius": 1.2
+                    },
+                    "subhalo": {
+                        "type": "autogalaxy.profiles.mass_profiles.total_mass_profiles.SphIsothermal",
+                        "centre": [
+                            1.25,
+                            0.0
+                        ],
+                        "einstein_radius": 0.1
+                    },
+                    "type": "autogalaxy.galaxy.galaxy.Galaxy",
+                    "redshift": 0.2,
+                    "pixelization": null,
+                    "regularization": null,
+                    "hyper_galaxy": null
+                }
+            ],
+            "redshift": 0.2,
+            "profiling_dict": null
+        },
+        {
+            "type": "autogalaxy.plane.plane.Plane",
+            "galaxies": [
+                {
+                    "bulge": {
+                        "type": "autogalaxy.profiles.light_profiles.light_profiles.EllSersic",
+                        "centre": [
+                            0.0,
+                            0.0
+                        ],
+                        "elliptical_comps": [
+                            0.15282801243254804,
+                            -0.08823529411764704
+                        ],
+                        "intensity": 0.8,
+                        "effective_radius": 0.1,
+                        "sersic_index": 1.0
+                    },
+                    "type": "autogalaxy.galaxy.galaxy.Galaxy",
+                    "redshift": 0.6,
+                    "pixelization": null,
+                    "regularization": null,
+                    "hyper_galaxy": null
+                }
+            ],
+            "redshift": 0.6,
+            "profiling_dict": null
+        }
+    ],
+    "cosmology": "Planck15",
+    "profiling_dict": null
+}

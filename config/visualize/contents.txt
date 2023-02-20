@@ -1,0 +1,9 @@
+mat_wrap
+    Default matplotlib settings used by `Plotter`'s which can be edited to change default appearance of figures and
+    subplots in PyAutoLens.
+mat_wrap_1d
+    Default matplotlib settings used by 1D `Plotter`'s which can be edited to change default appearance of figures and
+    subplots in PyAutoLens.
+mat_wrap_2d
+    Default matplotlib settings used by 2D `Plotter`'s which can be edited to change default appearance of figures and
+    subplots in PyAutoLens.
