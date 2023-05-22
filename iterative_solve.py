@@ -118,11 +118,13 @@ class IterativePotentialCorrect(object):
         self._Cf_matrix = np.copy(
             self.grid_obj.map_matrix
         ) #see the $C_f$ matrix in our document (eq.7), which interpolate data defined on coarser dpsi grid to native image grid
-        self._Dpsi_matrix = pcu.dpsi_gradient_operator_from(
+        self._Dpsi_matrix = pcu.fine_dpsi_gradient_operator_from(
+            self._Cf_matrix,
             self.grid_obj.Hx_dpsi, 
             self.grid_obj.Hy_dpsi
         ) #the potential correction gradient operator, see the eq.8 in our document
         self._dpsi_grid_points = np.vstack([self.grid_obj.ygrid_dpsi_1d, self.grid_obj.xgrid_dpsi_1d]).T #points of sparse potential correction grid
+        self._data_grid_points = np.vstack([self.grid_obj.ygrid_data_1d, self.grid_obj.xgrid_data_1d]).T
         if lam_dpsi_type == '4th':
             self.grid_obj.get_diff_4th_reg_operator_dpsi()
             self._HTH_dpsi = np.matmul(self.grid_obj.Hx_dpsi_4th_reg.T, self.grid_obj.Hx_dpsi_4th_reg) + \
@@ -243,13 +245,13 @@ class IterativePotentialCorrect(object):
 
 
     def Ds_matrix_from(self, pix_mass_obj, source_points, source_values):
-        self.alpha_dpsi_yx = pix_mass_obj.eval_alpha_yx_at(self._dpsi_grid_points) #use previously found pix_mass_object to ray-tracing
-        self.alpha_dpsi_yx = np.asarray(self.alpha_dpsi_yx).T
-        self.src_plane_dpsi_yx = self._dpsi_grid_points - self.alpha_dpsi_yx #the location of dpsi grid on the source-plane
+        alpha_data_yx = pix_mass_obj.eval_alpha_yx_at(self._data_grid_points) #use previously found pix_mass_object to ray-tracing
+        alpha_data_yx = np.asarray(alpha_data_yx).T
+        src_plane_data_yx = self._data_grid_points - alpha_data_yx #the location of dpsi grid on the source-plane
         source_gradient = pcu.source_gradient_from(
             source_points, #previously found best-fit src pixlization grids
             source_values, #previously found best-fit src reconstruction
-            self.src_plane_dpsi_yx, 
+            src_plane_data_yx, 
             cross_size=0.01, #TODO, better way to calculate the gradient? cross-size?
         )
         return pcu.source_gradient_matrix_from(source_gradient)  
@@ -283,11 +285,8 @@ class IterativePotentialCorrect(object):
         self.Ds_matrix = self.Ds_matrix_from(pix_mass_obj, source_points, source_values)
 
         self.intensity_deficit_matrix = -1.0*np.matmul(
-            self._Cf_matrix,
-            np.matmul(
-                self.Ds_matrix,
-                self._Dpsi_matrix,
-            )
+            self.Ds_matrix,
+            self._Dpsi_matrix,
         )
         self.Lc_matrix = np.hstack([self.L_matrix, self.intensity_deficit_matrix]) #see eq.14 in our document
         self.Mc_matrix = np.matmul(self._B_matrix, self.Lc_matrix)

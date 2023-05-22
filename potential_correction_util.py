@@ -92,6 +92,25 @@ def dpsi_gradient_operator_from(Hx_dpsi, Hy_dpsi):
     return dpsi_gradient_operator
 
 
+def fine_dpsi_gradient_operator_from(Cf_matrix, Hx_dpsi, Hy_dpsi):
+    """
+    Accept the x/y differential operator Hx_dpsi and Hy_dps; both shapes are [n_unmased_dpsi_points, n_unmased_dpsi_points]
+    Construct the dpsi_gradient_operator with shape [2*n_unmased_dpsi_points, n_unmased_dpsi_points]. 
+    see eq-8 in our potential correction document
+    """
+    n_unmased_data_points = len(Cf_matrix)
+    n_unmased_dpsi_points = len(Hx_dpsi)
+    dpsi_gradient_operator = np.zeros((2*n_unmased_data_points, n_unmased_dpsi_points))
+    Hx_dpsi_interpol = np.matmul(Cf_matrix, Hx_dpsi) #shape:[n_unmasked_data_points, n_unmasked_dpsi_points]
+    Hy_dpsi_interpol = np.matmul(Cf_matrix, Hy_dpsi) #shape:[n_unmasked_data_points, n_unmasked_dpsi_points]
+
+    for count in range(n_unmased_data_points):
+        dpsi_gradient_operator[count*2, :] = Hx_dpsi_interpol[count, :]
+        dpsi_gradient_operator[count*2+1, :] = Hy_dpsi_interpol[count, :]
+
+    return dpsi_gradient_operator
+
+
 def order_4th_reg_matrix(Hx_4th, Hy_4th):
     return np.matmul(Hx_4th.T, Hx_4th) + np.matmul(Hy_4th.T, Hy_4th)
 
