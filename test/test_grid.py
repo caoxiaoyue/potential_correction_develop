@@ -89,7 +89,7 @@ class TestSparseDpsiGrid:
         assert grid_obj.dpix_dpsi == 0.2
         assert (grid_obj.xgrid_dpsi==np.array(true_sparse_grid.native[:,:,1])).all()
         assert (grid_obj.ygrid_dpsi==np.array(true_sparse_grid.native[:,:,0])).all()
-        assert grid_obj.image_bound==[-0.5,0.5,-0.5,0.5]
+        assert grid_obj.data_bound==[-0.5,0.5,-0.5,0.5]
 
 
     def test_1d_data_dpsi_grid(self):

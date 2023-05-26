@@ -26,12 +26,15 @@ class SparseDpsiGrid(object):
 
         xmin, xmax = self.xgrid_data.min()-0.5*dpix_data, self.xgrid_data.max()+0.5*dpix_data
         ymin, ymax = self.ygrid_data.min()-0.5*dpix_data, self.ygrid_data.max()+0.5*dpix_data
-        self.image_bound = [xmin, xmax, ymin, ymax]
+        self.data_bound = [xmin, xmax, ymin, ymax]
 
         self.dpix_dpsi = float((xmax-xmin)/shape_2d_dpsi[0])
         grid_dpsi = al.Grid2D.uniform(shape_native=shape_2d_dpsi, pixel_scales=self.dpix_dpsi, sub_size=1)
         self.xgrid_dpsi = np.array(grid_dpsi.native[:,:,1])
         self.ygrid_dpsi = np.array(grid_dpsi.native[:,:,0])
+        xmin, xmax = self.xgrid_dpsi.min()-0.5*dpix_dpsi, self.xgrid_dpsi.max()+0.5*dpix_dpsi
+        ymin, ymax = self.ygrid_dpsi.min()-0.5*dpix_dpsi, self.ygrid_dpsi.max()+0.5*dpix_dpsi
+        self.dpsi_bound = [xmin, xmax, ymin, ymax]
 
         self.grid_1d_from_mask()
 
