@@ -52,7 +52,6 @@ class IterativePotentialCorrect(object):
         psi_anchor_points=None,
         subhalo_fiducial_point=None,
         penalty_file="./penalty.txt",
-        save_fits=False,
     ):
         """
         psi_2d_0: the lens potential map of the initial start mass model, typicall given by a macro model like elliptical power law model.
@@ -76,7 +75,6 @@ class IterativePotentialCorrect(object):
         self.penalty_file_handle = open(self.merit_file, 'w')
         self.dlm = " "*6
         self.penalty_file_handle.write(f"niter{self.dlm}src_light_term{self.dlm}dpsi_term{self.dlm}chi2_image\n")
-        self.save_fits = save_fits
 
         #do iteration-0, the macro model
         self.count_iter = 0 #count the iteration number
@@ -496,26 +494,3 @@ class IterativePotentialCorrect(object):
             basedir=basedir, 
             iter_num=iter_num,
         )
-
-    #     if self.save_fits:
-    #         self.save_correction_fits(
-    #             basedir=basedir,
-    #             iter_num=iter_num,
-    #             kappa_correct=cumulative_kappa_correct,
-    #             psi_correct=cumulative_psi_correct,
-    #         )
-
-
-
-    # def save_correction_fits(
-    #     self, 
-    #     basedir=None, 
-    #     iter_num=None,
-    #     kappa_correct=None,
-    #     psi_correct=None,
-    # ):
-    #     abs_path = os.path.abspath(basedir)  #get absolute path
-    #     if not os.path.exists(f"{abs_path}/fits"):  #check if path exist
-    #         os.makedirs(f"{abs_path}/fits") #create new directory recursively
-    #     fits.writeto(f'{basedir}/fits/kappa_correction_{iter_num}.fits', kappa_correct, overwrite=True)
-    #     fits.writeto(f'{basedir}/fits/psi_correction_{iter_num}.fits', psi_correct, overwrite=True)
