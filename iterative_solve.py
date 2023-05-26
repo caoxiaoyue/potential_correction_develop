@@ -491,27 +491,31 @@ class IterativePotentialCorrect(object):
         if not os.path.exists(basedir):  #check if path exist
             os.makedirs(abs_path) #create new directory recursively
 
-        it_plot.visualize_this_iter(self)
+        it_plot.visualize_this_iter(
+            self, 
+            basedir=basedir, 
+            iter_num=iter_num,
+        )
 
-        if self.save_fits:
-            self.save_correction_fits(
-                basedir=basedir,
-                iter_num=iter_num,
-                kappa_correct=cumulative_kappa_correct,
-                psi_correct=cumulative_psi_correct,
-            )
+    #     if self.save_fits:
+    #         self.save_correction_fits(
+    #             basedir=basedir,
+    #             iter_num=iter_num,
+    #             kappa_correct=cumulative_kappa_correct,
+    #             psi_correct=cumulative_psi_correct,
+    #         )
 
 
 
-    def save_correction_fits(
-        self, 
-        basedir=None, 
-        iter_num=None,
-        kappa_correct=None,
-        psi_correct=None,
-    ):
-        abs_path = os.path.abspath(basedir)  #get absolute path
-        if not os.path.exists(f"{abs_path}/fits"):  #check if path exist
-            os.makedirs(f"{abs_path}/fits") #create new directory recursively
-        fits.writeto(f'{basedir}/fits/kappa_correction_{iter_num}.fits', kappa_correct, overwrite=True)
-        fits.writeto(f'{basedir}/fits/psi_correction_{iter_num}.fits', psi_correct, overwrite=True)
+    # def save_correction_fits(
+    #     self, 
+    #     basedir=None, 
+    #     iter_num=None,
+    #     kappa_correct=None,
+    #     psi_correct=None,
+    # ):
+    #     abs_path = os.path.abspath(basedir)  #get absolute path
+    #     if not os.path.exists(f"{abs_path}/fits"):  #check if path exist
+    #         os.makedirs(f"{abs_path}/fits") #create new directory recursively
+    #     fits.writeto(f'{basedir}/fits/kappa_correction_{iter_num}.fits', kappa_correct, overwrite=True)
+    #     fits.writeto(f'{basedir}/fits/psi_correction_{iter_num}.fits', psi_correct, overwrite=True)

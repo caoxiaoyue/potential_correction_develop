@@ -1,19 +1,22 @@
 from matplotlib import pyplot as plt
 from plot import pixelized_source as ps_plot
+import copy
+import numpy as np
 
-def visualize_this_iter(potential_correcter):
+def visualize_this_iter(potential_correcter, basedir='./result', iter_num=0):
     plt.figure(figsize=(15, 15))
     percent = [0,100]
     cbpar = {}
     cbpar['fraction'] = 0.046
     cbpar['pad'] = 0.04
+    cmap = copy.copy(plt.get_cmap('jet'))
+    cmap.set_bad(color='white')
     myargs_data = {'origin':'upper'}
     myargs_data['cmap'] = cmap
     myargs_data['extent'] = copy.copy(potential_correcter.grid_obj.data_bound)
     myargs_dpsi = copy.deepcopy(myargs_data)
     myargs_dpsi['extent'] = copy.copy(potential_correcter.grid_obj.dpsi_bound)
-    cmap = copy.copy(plt.get_cmap('jet'))
-    cmap.set_bad(color='white')
+
     markersize = 10
 
     rgrid = np.sqrt(potential_correcter.grid_obj.xgrid_data**2 + potential_correcter.grid_obj.ygrid_data**2)
