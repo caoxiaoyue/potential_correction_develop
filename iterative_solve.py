@@ -7,7 +7,6 @@ import potential_correction_util as pcu
 import scipy.linalg as linalg
 from scipy.spatial import Delaunay
 from potential_correction_util import LinearNDInterpolatorExt
-from matplotlib import pyplot as plt
 import copy
 from plot import iter_solve as it_plot
 import os
@@ -16,7 +15,7 @@ from astropy.io import fits
 
 
 class IterativePotentialCorrect(object):
-    def __init__(self, masked_imaging, shape_2d_dpsi=None, shape_2d_src=(50,50)):
+    def __init__(self, masked_imaging, shape_2d_dpsi=None, shape_2d_src=(50,50), sub_size=None):
         """
         shape_2d_dpsi: the shape of potential correction grid, if not set, this will be set to the lens image shape
         shape_2d_src: the number of grid used for source reconstruction (defined on image-plane)
@@ -29,6 +28,8 @@ class IterativePotentialCorrect(object):
         image_mask = self.masked_imaging.mask 
         dpix_data = self.masked_imaging.pixel_scales[0]
 
+        self.sub_size = sub_size
+
         if shape_2d_dpsi is None:
             shape_2d_dpsi = self.image_data.shape
         self.grid_obj = SparseDpsiGrid(image_mask, dpix_data, shape_2d_dpsi=shape_2d_dpsi) #Note, mask_data has not been cleaned
@@ -36,7 +37,7 @@ class IterativePotentialCorrect(object):
         image_mask = al.Mask2D(mask=self.grid_obj.mask_data, pixel_scales=(dpix_data, dpix_data))
         self.masked_imaging = self.masked_imaging.apply_mask(mask=image_mask) #since mask are cleaned, re-apply it to autolens imaging object
         self.masked_imaging = self.masked_imaging.apply_settings(
-            settings=al.SettingsImaging(sub_size=4, sub_size_inversion=4)
+            settings=al.SettingsImaging(sub_size=self.sub_size, sub_size_inversion=self.sub_size)
         )
 
         self.shape_2d_src = shape_2d_src
@@ -489,7 +490,7 @@ class IterativePotentialCorrect(object):
         if not os.path.exists(basedir):  #check if path exist
             os.makedirs(abs_path) #create new directory recursively
 
-        it_plot.visualize_this_iter(
+        it_plot.visualize_correction(
             self, 
             basedir=basedir, 
             iter_num=iter_num,
