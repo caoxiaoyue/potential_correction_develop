@@ -335,10 +335,18 @@ class IterativePotentialCorrect(object):
         )
         #update lens potential with potential correction at this iteration
         psi_2d_this_iter = self.pix_mass_prev_iter.psi_map + dpsi_2d #the new 2d lens potential map
+        # TODO refactor rescaling code, by setting dpsi changes at three points always equal to 0
         # psi_2d_this_iter = self.pix_mass_prev_iter.psi_map + 1.2*self.grid_obj.xgrid_data + 0.5*self.grid_obj.ygrid_data + 2.0 #for testing
+        # a_y, a_x, c = pcu.solve_psi_rescale_factor(
+        #     np.zeros(3), 
+        #     self._psi_anchor_points, 
+        #     1.2*self._psi_anchor_points[:,1]+0.5*self._psi_anchor_points[:,0]+2.0,
+        # )
 
         #rescale the current lens potential, to avoid various degeneracy problems. (see sec.2.3 in our document);
         psi_2d_this_iter, factor = self.rescale_lens_potential(psi_2d_this_iter)
+        # print('the psi rescale factor is',factor)
+        # print('the dpsi rescale factor is',a_y, a_x, c)
         #save the coarse potential correction map
         dpsi_map_coarse = np.zeros_like(self.grid_obj.xgrid_dpsi)
         dpsi_map_coarse[~self.grid_obj.mask_dpsi] = self.r_vector[self._ns:]
