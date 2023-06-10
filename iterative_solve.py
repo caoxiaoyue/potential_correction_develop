@@ -15,7 +15,7 @@ from astropy.io import fits
 
 
 class IterativePotentialCorrect(object):
-    def __init__(self, masked_imaging, shape_2d_dpsi=None, shape_2d_src=(50,50), sub_size=None):
+    def __init__(self, masked_imaging, shape_2d_dpsi=None, shape_2d_src=(50,50), sub_size=4):
         """
         shape_2d_dpsi: the shape of potential correction grid, if not set, this will be set to the lens image shape
         shape_2d_src: the number of grid used for source reconstruction (defined on image-plane)
@@ -52,7 +52,6 @@ class IterativePotentialCorrect(object):
         lam_dpsi_type='4th',
         psi_anchor_points=None,
         subhalo_fiducial_point=None,
-        penalty_file="./penalty.txt",
     ):
         """
         psi_2d_0: the lens potential map of the initial start mass model, typicall given by a macro model like elliptical power law model.
@@ -72,10 +71,6 @@ class IterativePotentialCorrect(object):
         self._psi_anchor_points = psi_anchor_points
         self._psi_2d_start = psi_2d_start
         self._psi_2d_start[self.masked_imaging.mask] = 0.0 #set the lens potential of masked pixels to 0
-        self.merit_file = penalty_file
-        self.penalty_file_handle = open(self.merit_file, 'w')
-        self.dlm = " "*6
-        self.penalty_file_handle.write(f"niter{self.dlm}src_light_term{self.dlm}dpsi_term{self.dlm}chi2_image\n")
 
         #do iteration-0, the macro model
         self.count_iter = 0 #count the iteration number
@@ -190,9 +185,6 @@ class IterativePotentialCorrect(object):
         residual_1d = (mapped_reconstructed_image_1d - self._d_1d)
         norm_residual_1d = residual_1d / self._n_1d
         chi2_image_1d = np.sum(norm_residual_1d**2)
-
-        self.penalty_file_handle.write(f"{iter_num}{self.dlm}{reg_src:.2f}{self.dlm}{reg_dpsi:.2f}{self.dlm}{chi2_image_1d:.2f}\n")
-        self.penalty_file_handle.flush()
 
 
     def pixelized_mass_from(self, psi_2d):
@@ -479,7 +471,6 @@ class IterativePotentialCorrect(object):
             condition = self.run_this_iteration()
             if condition:
                 print('------','code converge')
-                self.penalty_file_handle.close()  
                 break
             else:
                 print('------',ii, self.count_iter)  
