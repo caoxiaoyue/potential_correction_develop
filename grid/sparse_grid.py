@@ -64,6 +64,8 @@ class SparseDpsiGrid(object):
                 min_indices = np.where(if_array_eq)
                 if np.any((~self.mask_data)[min_indices]):
                     self.mask_dpsi[i,j] = False
+        
+        self.mask_dpsi = iter_clean_mask(self.mask_dpsi) #clean the dpsi_mask, also remove the exposed pixels
 
 
     def grid_1d_from_mask(self):
@@ -78,7 +80,6 @@ class SparseDpsiGrid(object):
         self.ygrid_data_1d = self.ygrid_data.flatten()[self.indices_1d_data]
 
         self.mask_dpsi_from_data()
-        self.mask_dpsi = iter_clean_mask(self.mask_dpsi) #clean the dpsi_mask, also remove the exposed pixels
         self.indices_1d_dpsi = np.where((~self.mask_dpsi).flatten())[0]
         self.xgrid_dpsi_1d = self.xgrid_dpsi.flatten()[self.indices_1d_dpsi]
         self.ygrid_dpsi_1d = self.ygrid_dpsi.flatten()[self.indices_1d_dpsi]           
@@ -152,12 +153,12 @@ class SparseDpsiGrid(object):
 
         return a matrix, with a shape of [n_unmasked_data_pixels, n_unmasked_dpsi_pixels]
         """
-        self.map_matrix = np.zeros((len(self.indices_1d_data), len(self.indices_1d_dpsi)))
+        self.interp_matrix = np.zeros((len(self.indices_1d_data), len(self.indices_1d_dpsi)))
 
         for id_data in range(len(self.indices_1d_data)):
             box_indices = (self.data_dpsi_pair_info[id_data, 0, :]).astype('int64')
             box_weights = (self.data_dpsi_pair_info[id_data, 1, :])
-            self.map_matrix[id_data, box_indices] = box_weights[:]
+            self.interp_matrix[id_data, box_indices] = box_weights[:]
 
 
     def get_gradient_operator_data(self):

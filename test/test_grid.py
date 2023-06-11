@@ -170,7 +170,7 @@ class TestSparseDpsiGrid:
 
         data_image1d_true = linear_func(grid_obj.xgrid_data_1d, grid_obj.ygrid_data_1d)
         dpsi_image1d_true = linear_func(grid_obj.xgrid_dpsi_1d, grid_obj.ygrid_dpsi_1d)
-        data_image1d_map = np.matmul(grid_obj.map_matrix, dpsi_image1d_true)
+        data_image1d_map = np.matmul(grid_obj.interp_matrix, dpsi_image1d_true)
         
         assert np.isclose(data_image1d_map, data_image1d_true, rtol=1e-05, atol=1e-08, equal_nan=False).all()
 

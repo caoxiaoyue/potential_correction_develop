@@ -115,7 +115,7 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
         self._n_1d = self.image_noise[~self.grid_obj.mask_data] #1d unmasked noise
         self._dof = len(self._d_1d) - self._np
         self._Cf_matrix = np.copy(
-            self.grid_obj.map_matrix
+            self.grid_obj.interp_matrix
         ) #see the $C_f$ matrix in our document (eq.7), which interpolate data defined on coarser dpsi grid to native image grid
         self._Dpsi_matrix = pcu.fine_dpsi_gradient_operator_from(
             self._Cf_matrix,

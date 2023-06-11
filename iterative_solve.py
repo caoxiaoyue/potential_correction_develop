@@ -110,7 +110,7 @@ class IterativePotentialCorrect(object):
         self._n_1d = self.image_noise[~self.grid_obj.mask_data] #1d unmasked noise
         self._B_matrix = np.copy(self.pix_src_obj.psf_blur_matrix) #psf bluring matrix, see eq.7 in our document
         self._Cf_matrix = np.copy(
-            self.grid_obj.map_matrix
+            self.grid_obj.interp_matrix
         ) #see the $C_f$ matrix in our document (eq.7), which interpolate data defined on coarser dpsi grid to native image grid
         self._Dpsi_matrix = pcu.fine_dpsi_gradient_operator_from(
             self._Cf_matrix,
@@ -171,20 +171,20 @@ class IterativePotentialCorrect(object):
         return float(merit_this)
 
 
-    def write_penalty_this_iter(self, iter_num):
-        reg_src =  np.matmul(
-            self.r_vector[0:self._ns].T, 
-            np.matmul(self.RTR_matrix[0:self._ns, 0:self._ns], self.r_vector[0:self._ns]),
-        )
-        reg_dpsi =  np.matmul(
-            self.r_vector[self._ns:].T, 
-            np.matmul(self.RTR_matrix[self._ns:, self._ns:], self.r_vector[self._ns:]),
-        )
-        logging.info(f'the log det of reg_dpsi_matrix {np.linalg.slogdet(self.RTR_matrix[self._ns:, self._ns:])}')
-        mapped_reconstructed_image_1d = np.matmul(self.Mc_matrix, self.r_vector)
-        residual_1d = (mapped_reconstructed_image_1d - self._d_1d)
-        norm_residual_1d = residual_1d / self._n_1d
-        chi2_image_1d = np.sum(norm_residual_1d**2)
+    # def write_penalty_this_iter(self, iter_num):
+    #     reg_src =  np.matmul(
+    #         self.r_vector[0:self._ns].T, 
+    #         np.matmul(self.RTR_matrix[0:self._ns, 0:self._ns], self.r_vector[0:self._ns]),
+    #     )
+    #     reg_dpsi =  np.matmul(
+    #         self.r_vector[self._ns:].T, 
+    #         np.matmul(self.RTR_matrix[self._ns:, self._ns:], self.r_vector[self._ns:]),
+    #     )
+    #     logging.info(f'the log det of reg_dpsi_matrix {np.linalg.slogdet(self.RTR_matrix[self._ns:, self._ns:])}')
+    #     mapped_reconstructed_image_1d = np.matmul(self.Mc_matrix, self.r_vector)
+    #     residual_1d = (mapped_reconstructed_image_1d - self._d_1d)
+    #     norm_residual_1d = residual_1d / self._n_1d
+    #     chi2_image_1d = np.sum(norm_residual_1d**2)
 
 
     def pixelized_mass_from(self, psi_2d):
@@ -275,11 +275,11 @@ class IterativePotentialCorrect(object):
         self.L_matrix = np.copy(self.pix_src_obj.mapping_matrix)
         self.Ds_matrix = self.Ds_matrix_from(pix_mass_obj, source_points, source_values)
 
-        self.intensity_deficit_matrix = -1.0*np.matmul(
+        self.DSD_matrix = -1.0*np.matmul(
             self.Ds_matrix,
             self._Dpsi_matrix,
         )
-        self.Lc_matrix = np.hstack([self.L_matrix, self.intensity_deficit_matrix]) #see eq.14 in our document
+        self.Lc_matrix = np.hstack([self.L_matrix, self.DSD_matrix]) #see eq.14 in our document
         self.Mc_matrix = np.matmul(self._B_matrix, self.Lc_matrix)
 
         self.RTR_matrix = self.RTR_matrix_from(self.pix_src_obj, lam_s, lam_dpsi)
@@ -321,7 +321,7 @@ class IterativePotentialCorrect(object):
         # print("evidence values is------------------", self.evidence_from())
 
         #write values of each penalty term in eq.16 in our document to penlaty.txt file
-        self.write_penalty_this_iter(self.count_iter) 
+        # self.write_penalty_this_iter(self.count_iter) 
 
         #extract source
         self.s_values_this_iter = self.r_vector[0:self._ns]
