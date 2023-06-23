@@ -13,6 +13,8 @@ import os
 import logging
 from astropy.io import fits
 from iterative_solve import IterativePotentialCorrect
+import time
+from scipy.optimize import differential_evolution
 
 
 class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
@@ -69,16 +71,18 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
         psi_2d_start=None, 
         niter=100, 
         lam_dpsi_start=1e9,
-        lam_dpsi_type='4th',
+        scale_dpsi_start=None,
+        dpsi_reg_type='4th',
         psi_anchor_points=None,
         subhalo_fiducial_point=None,
+        output_dir='./result'
     ):
         """
         psi_2d_0: the lens potential map of the initial start mass model, typicall given by a macro model like elliptical power law model.
         niter: the upper limit of the number of the potential correctio iterations
         lam_s_0: the initial regularization strength of pixelized sources. 
         lam_dpsi_0: the initial regularization strength of potential correction (dpsi)
-        lam_dpsi_type: the regularization type of dpsi
+        dpsi_reg_type: the regularization type of dpsi
         psi_anchor_points: the anchor points of lens potential. we require the lens potential values at those anchor point
         remain unchanged during potential corrention, to avoid various degeneracy problems. (see sec.2.3 in our document);
         dpsi_anchor_points has the following form: [(y1,x1), (y2,x2), (y3,x3)]
@@ -87,14 +91,18 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
         """
         self._niter = niter
         self._lam_dpsi_start = lam_dpsi_start
+        self._scale_dpsi_start = scale_dpsi_start
         self._psi_anchor_points = psi_anchor_points
         self._psi_2d_start = psi_2d_start
         self._psi_2d_start[self.masked_imaging.mask] = 0.0 #set the lens potential of masked pixels to 0
+        self._dpsi_reg_type = dpsi_reg_type
+        self._output_dir = output_dir
 
         #do iteration-0, the macro model
         self.count_iter = 0 #count the iteration number
         #1--------regularization of source and lens potential of this iteration
-        self.lam_dpsi_this_iter = self._lam_dpsi_start #potential correction reg
+        self.lam_dpsi_this_iter = self._lam_dpsi_start #potential correction reg strength
+        self.scale_dpsi_this_iter = self._scale_dpsi_start #potential correction reg scale
         #2--------the lens mass model of currect iteration
         self.pix_mass_this_iter = self.pixelized_mass_from(self._psi_2d_start) #initialize with lens potential given by macro model
 
@@ -122,28 +130,17 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
             self.grid_obj.Hx_dpsi, 
             self.grid_obj.Hy_dpsi
         ) #the potential correction gradient operator, see the eq.8 in our document
-        if lam_dpsi_type == '4th':
-            self.grid_obj.get_diff_4th_reg_operator_dpsi()
-            self._HTH_dpsi = np.matmul(self.grid_obj.Hx_dpsi_4th_reg.T, self.grid_obj.Hx_dpsi_4th_reg) + \
-                np.matmul(self.grid_obj.Hy_dpsi_4th_reg.T, self.grid_obj.Hy_dpsi_4th_reg)
-        elif lam_dpsi_type == '2nd':
-            self.grid_obj.get_diff_2nd_reg_operator_dpsi()
-            self._HTH_dpsi = np.matmul(self.grid_obj.Hx_dpsi_2nd_reg.T, self.grid_obj.Hx_dpsi_2nd_reg) + \
-                np.matmul(self.grid_obj.Hy_dpsi_2nd_reg.T, self.grid_obj.Hy_dpsi_2nd_reg)
-        elif lam_dpsi_type == 'gauss':
-            pass
-        elif lam_dpsi_type == 'exp':
-            pass
 
         #a list which save the potential correction map
         self._dpsi_map_coarse = [np.zeros_like(self.grid_obj.xgrid_dpsi)] #the potential correction map of iteration-0 is 0
         
-        #calculate the merit of initial macro model. see eq.16 in our document 
-        self.RTR_mat = np.copy(self.lam_dpsi_this_iter * self._HTH_dpsi) #need init this to cal the dig_info
-        self._dig_info = [self.ret_diag_info()]
+        #calculate the total_penalty of initial macro model. see eq.16 in our document
+        self.RTR_mat_from(self.lam_dpsi_this_iter, self.scale_dpsi_this_iter) 
+        # self.RTR_mat = np.copy(self.lam_dpsi_this_iter * self._HTH_dpsi) #need init this to cal the dig_info
+        self._diag_info = [self.ret_diag_info()]
 
         #visualize iteration-0
-        self.visualize_iteration(iter_num=self.count_iter) ##TODO here
+        self.visualize_iteration(basedir=self._output_dir, iter_num=self.count_iter) 
 
         #assign info of this iteration to the previous one
         self.update_iterations()
@@ -152,19 +149,19 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
     def ret_diag_info(self):
         info_dict = {}
         image_chi2 = (self.residual_this_iter/self._n_1d)**2
-        info_dict['chi2'] = np.sum(image_chi2)
-        info_dict['rchi2'] = info_dict['chi2']/self._dof
+        info_dict['image_chi2'] = np.sum(image_chi2)
+        info_dict['image_rchi2'] = info_dict['image_chi2']/self._dof
 
         dpsi_1d = self._dpsi_map_coarse[-1][~self.grid_obj.mask_dpsi]
-        merit = info_dict['chi2'] + \
+        dpsi_penalty = np.matmul(
+            dpsi_1d.T, 
             np.matmul(
-                dpsi_1d.T, 
-                np.matmul(
-                    self.RTR_mat, 
-                    dpsi_1d
-                )
+                self.RTR_mat, 
+                dpsi_1d
             )
-        info_dict['merit'] = float(merit)
+        )
+        info_dict['dpsi_penalty'] = float(dpsi_penalty)
+        info_dict['total_penalty'] = info_dict['image_chi2'] + info_dict['dpsi_penalty']
         return info_dict
 
 
@@ -182,7 +179,7 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
         return pix_mass_obj
 
 
-    def update_lam_dpsi(self):
+    def update_lam_dpsi(self): ##TODO
         """
         update the regularization strength of potential correction with iterations
         """
@@ -229,14 +226,33 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
         M_mat = np.matmul(self._B_matrix, DSD_mat)
         return M_mat 
 
-
-    def Mc_RTR_mat_from(
-        self, 
-        pix_mass_obj, 
-        lam_dpsi,
-    ):
+    
+    def M_mat_from(self, pix_mass_obj):
         self.M_mat = self.linear_mapping_mat_from(pix_mass_obj)
-        self.RTR_mat = np.copy(lam_dpsi * self._HTH_dpsi)
+
+
+    def RTR_mat_from(self, lam_dpsi, scale_dpsi):
+        if self._dpsi_reg_type == '2nd':
+            if not hasattr(self, '_HTH_dpsi_cache'):
+                self.grid_obj.get_diff_2nd_reg_operator_dpsi()
+                self._HTH_dpsi_cache = np.matmul(self.grid_obj.Hx_dpsi_2nd_reg.T, self.grid_obj.Hx_dpsi_2nd_reg) + \
+                    np.matmul(self.grid_obj.Hy_dpsi_2nd_reg.T, self.grid_obj.Hy_dpsi_2nd_reg)
+                self.RTR_mat = np.copy(lam_dpsi * self._HTH_dpsi_cache)
+        elif self._dpsi_reg_type == '4th':
+            if not hasattr(self, '_HTH_dpsi_cache'):
+                self.grid_obj.get_diff_4th_reg_operator_dpsi()
+                self._HTH_dpsi_cache = np.matmul(self.grid_obj.Hx_dpsi_4th_reg.T, self.grid_obj.Hx_dpsi_4th_reg) + \
+                    np.matmul(self.grid_obj.Hy_dpsi_4th_reg.T, self.grid_obj.Hy_dpsi_4th_reg)
+                self.RTR_mat = np.copy(lam_dpsi * self._HTH_dpsi_cache)
+        elif (self._dpsi_reg_type == 'vkl_exp') or (self._dpsi_reg_type == 'vkl_gauss'):
+            self.RTR_mat = al.util.regularization.regularization_matrix_vkl_from(
+                scale_dpsi, 
+                lam_dpsi, 
+                self._dpsi_grid_points, 
+                self._dpsi_reg_type,
+            )
+        else:
+            raise Exception(f"Not supported regularization type: {self._dpsi_reg_type}")
 
 
     def data_vec_from(self, M_mat):
@@ -247,16 +263,12 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
         return data_vector
 
     
-    def run_this_iteration(self):
-        #update regularization parameters for this iteration
-        self.update_lam_dpsi()
-
-        self.Mc_RTR_mat_from(
-            self.pix_mass_prev_iter, 
-            self.lam_dpsi_this_iter
-        )
+    def linear_inversion(self, lam_dpsi, scale_dpsi, cal_M_mat=True):
+        if cal_M_mat:
+            self.M_mat_from(self.pix_mass_prev_iter)
+        self.RTR_mat_from(lam_dpsi, scale_dpsi) 
         self.data_vec = self.data_vec_from(self.M_mat)
-
+        
         #solve the next source and potential corrections
         self.curve_term = np.matmul(
             np.matmul(self.M_mat.T, self._inv_cov_matrix),
@@ -265,7 +277,9 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
         self.curve_reg_term = self.curve_term + self.RTR_mat
         # print('~~~~~~~~~~~~~~~~iteration-{}, r-condition number {:.5e}'.format(self.count_iter, 1/np.linalg.cond(self.curve_reg_term)))
         self.r_vec = linalg.solve(self.curve_reg_term, self.data_vec)
+    
 
+    def extract_info_from_linear_inversion(self):
         #extract infor of this iteration
         dpsi_2d = np.zeros_like(self._psi_2d_start, dtype='float')
         dpsi_2d[~self.grid_obj.mask_data] = np.matmul(
@@ -281,18 +295,108 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
         dpsi_map_coarse = np.zeros_like(self.grid_obj.xgrid_dpsi)
         dpsi_map_coarse[~self.grid_obj.mask_dpsi] = self.r_vec
         dpsi_map_coarse = dpsi_map_coarse + factor[0]*self.grid_obj.ygrid_dpsi + factor[1]*self.grid_obj.xgrid_dpsi + factor[2]
+
+        pix_mass_this_iter = self.pixelized_mass_from(psi_2d_this_iter)
+        image_model_this_iter = self.forward_source_model(pix_mass_this_iter)
+        residual_this_iter = (self.image_data - image_model_this_iter)[~self.grid_obj.mask_data]
+
+        return dpsi_map_coarse, pix_mass_this_iter, image_model_this_iter, residual_this_iter
+        # self._dpsi_map_coarse.append(dpsi_map_coarse)
+        # #get pixelized mass object of this iteration
+        # self.pix_mass_this_iter = self.pixelized_mass_from(psi_2d_this_iter)
+        # #update the residual for next iteration
+        # self.image_model_this_iter = self.forward_source_model(self.pix_mass_this_iter)
+        # self.residual_this_iter = (self.image_data - self.image_model_this_iter)[~self.grid_obj.mask_data]
+
+
+    def evidence_from_reconstruction(self, dpsi_1d):
+        sign, logval = np.linalg.slogdet(self.curve_reg_term) 
+        self.log_curve_reg_mat_term = sign*logval
+
+        sign, logval = np.linalg.slogdet(self.RTR_mat)
+        self.log_reg_mat_term = sign*logval
+
+        self.reg_term = np.matmul(
+            dpsi_1d.T, 
+            np.matmul(
+                self.RTR_mat, 
+                dpsi_1d
+            )
+        )
+
+        self.noise_norm = float(np.sum(np.log(2 * np.pi * self.masked_imaging.noise_map ** 2.0)))
+
+        ##NOTE prev_mass model should no clash when fit dpsi reg par
+        ## enusre no updating_iteration when optimize dpsi reg par
+        self.pesudo_residual = (self.residual_prev_iter - np.matmul(self.M_mat,  self.r_vec))/self._n_1d
+        self.pesudo_chi2_term = np.sum(self.pesudo_residual**2)
+
+        self.log_evidence = float(
+            -0.5
+            * (
+                self.pesudo_chi2_term 
+                + self.reg_term 
+                + self.log_curve_reg_mat_term
+                - self.log_reg_mat_term
+                + self.noise_norm
+            )
+        )
+
+        print('-----------------------------')
+        print(self.pesudo_chi2_term, self.reg_term, self.log_curve_reg_mat_term, self.log_reg_mat_term, self.noise_norm)
+        print('-----------------------------')
+
+        return self.log_evidence
+
+
+    def regularization_merit(self, X):
+        self.linear_inversion(lam_dpsi=10**(X[0]), scale_dpsi=10**(X[1]), cal_M_mat=False)
+        dpsi_map_coarse, pix_mass_this_iter, image_model_this_iter, residual_this_iter = self.extract_info_from_linear_inversion()
+        dpsi_1d = dpsi_map_coarse[~self.grid_obj.mask_dpsi]
+        return -1.0*self.evidence_from_reconstruction(dpsi_1d)
+
+
+    def find_best_regularization(self, log10_lam_range=[-8, 8], log10_scale_range=[-3, 3]):
+        '''
+        return the best-fit regularization strength given a ``fixed'' mass model (pixelized_mass_obj)
+        log10_lam_range: set the log range of regularization strength. default: 10^-5 to 10^4 
+        '''
+        self.M_mat_from(self.pix_mass_prev_iter)
+        t0 = time.time()
+        self.best_fit_reg_info = differential_evolution(self.regularization_merit, bounds=[log10_lam_range, log10_scale_range])
+        self.mp_scale = 10**(self.best_fit_reg_info['x'][1]) #this regularization strength maximize the posterior
+        t1 = time.time()
+        self.mp_lam = 10**(self.best_fit_reg_info['x'][0]) #this regularization strength maximize the posterior
+        self.mp_ev = -1.0*self.best_fit_reg_info['fun'] #this is the corrpesonding evidence values
+        print(f'time elapse of it-{self.count_iter} is: {t1-t0}')
+
+
+    def run_this_iter(self):
+        if (self._dpsi_reg_type == '2nd') or (self._dpsi_reg_type == '4th'):
+            self.update_lam_dpsi() 
+            self.linear_inversion(self.lam_dpsi_this_iter, self.scale_dpsi_this_iter)
+        else:
+            #find the best reg scale and strength by maximizing the evidence
+            self.find_best_regularization(log10_lam_range=[-8, 8], log10_scale_range=[-3, 3])
+            self.lam_dpsi_this_iter = self.mp_lam
+            self.scale_dpsi_this_iter = self.mp_scale
+            # self.lam_dpsi_this_iter = 1e6
+            # self.scale_dpsi_this_iter = 0.01
+            self.linear_inversion(self.lam_dpsi_this_iter, self.scale_dpsi_this_iter)
+            # print('evidence--------', self.regularization_merit([np.log10(self.lam_dpsi_this_iter), np.log10(self.scale_dpsi_this_iter)]))
+
+
+        dpsi_map_coarse, pix_mass_this_iter, image_model_this_iter, residual_this_iter = self.extract_info_from_linear_inversion()
         self._dpsi_map_coarse.append(dpsi_map_coarse)
-        #get pixelized mass object of this iteration
-        self.pix_mass_this_iter = self.pixelized_mass_from(psi_2d_this_iter)
-        #update the residual for next iteration
-        self.image_model_this_iter = self.forward_source_model(self.pix_mass_this_iter)
-        self.residual_this_iter = (self.image_data - self.image_model_this_iter)[~self.grid_obj.mask_data]
-        
+        self.pix_mass_this_iter = pix_mass_this_iter
+        self.image_model_this_iter = image_model_this_iter
+        self.residual_this_iter = residual_this_iter
+
         #do visualization
-        self.visualize_iteration(iter_num=self.count_iter)
+        self.visualize_iteration(basedir=self._output_dir, iter_num=self.count_iter)
 
         #get diagnostics info for this iteration
-        self._dig_info.append(self.ret_diag_info())
+        self._diag_info.append(self.ret_diag_info())
 
         if self.has_converged():
             return True
@@ -303,8 +407,8 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
 
 
     def has_converged(self):
-        relative_change = (self._dig_info[-2]['merit'] - self._dig_info[-1]['merit'])/self._dig_info[-2]['merit']
-        print('previous VS current merit:', self._dig_info[-2]['merit'], self._dig_info[-1]['merit'], relative_change)
+        relative_change = (self._diag_info[-2]['total_penalty'] - self._diag_info[-1]['total_penalty'])/self._diag_info[-2]['total_penalty']
+        print('previous VS current total_penalty:', self._diag_info[-2]['total_penalty'], self._diag_info[-1]['total_penalty'], relative_change)
 
         if relative_change < 1e-8:
             # return True ##TODO: need to find a better convergence criteria
@@ -315,7 +419,7 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
 
     def run_iter_solve(self):
         for ii in range(1, self._niter):
-            condition = self.run_this_iteration()
+            condition = self.run_this_iter()
             if condition:
                 print('------','code converge')
                 break
