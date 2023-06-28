@@ -237,13 +237,13 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
                 self.grid_obj.get_diff_2nd_reg_operator_dpsi()
                 self._HTH_dpsi_cache = np.matmul(self.grid_obj.Hx_dpsi_2nd_reg.T, self.grid_obj.Hx_dpsi_2nd_reg) + \
                     np.matmul(self.grid_obj.Hy_dpsi_2nd_reg.T, self.grid_obj.Hy_dpsi_2nd_reg)
-                self.RTR_mat = np.copy(lam_dpsi * self._HTH_dpsi_cache)
+            self.RTR_mat = np.copy(lam_dpsi * self._HTH_dpsi_cache)
         elif self._dpsi_reg_type == '4th':
             if not hasattr(self, '_HTH_dpsi_cache'):
                 self.grid_obj.get_diff_4th_reg_operator_dpsi()
                 self._HTH_dpsi_cache = np.matmul(self.grid_obj.Hx_dpsi_4th_reg.T, self.grid_obj.Hx_dpsi_4th_reg) + \
                     np.matmul(self.grid_obj.Hy_dpsi_4th_reg.T, self.grid_obj.Hy_dpsi_4th_reg)
-                self.RTR_mat = np.copy(lam_dpsi * self._HTH_dpsi_cache)
+            self.RTR_mat = np.copy(lam_dpsi * self._HTH_dpsi_cache)
         elif (self._dpsi_reg_type == 'vkl_exp') or (self._dpsi_reg_type == 'vkl_gauss'):
             self.RTR_mat = al.util.regularization.regularization_matrix_vkl_from(
                 scale_dpsi, 
