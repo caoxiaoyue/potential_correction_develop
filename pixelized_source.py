@@ -149,7 +149,7 @@ class PixelizedSource(object):
             mapping_matrix=self.blurred_mapping_matrix, reconstruction=self.src_recontruct
         )
 
-        self.residual_map =  self.mapped_reconstructed_image - self.masked_imaging.image
+        self.residual_map =  self.masked_imaging.image - self.mapped_reconstructed_image
         self.norm_residual_map = self.residual_map / self.masked_imaging.noise_map
 
 
@@ -213,6 +213,7 @@ class PixelizedSource(object):
         t0 = time.time()
         if self.reg_type == "gradient":
             self.best_fit_reg_info = differential_evolution(self.regularization_merit, bounds=[log10_lam_range,])
+            self.mp_scale = None
         else:
             self.best_fit_reg_info = differential_evolution(self.regularization_merit, bounds=[log10_lam_range, log10_scale_range])
             self.mp_scale = 10**(self.best_fit_reg_info['x'][1]) #this regularization strength maximize the posterior
