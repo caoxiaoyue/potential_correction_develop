@@ -49,7 +49,11 @@ def visualize_correction(potential_correcter, basedir='./result', iter_num=0):
     #---------model reconstruction given current mass model
     plt.subplot(333)
     mapped_reconstructed_image_2d = np.zeros_like(potential_correcter.image_data)
-    potential_correcter.pix_src_obj.source_inversion(potential_correcter.pix_mass_this_iter, lam_s=potential_correcter.lam_s_this_iter)
+    try:
+        #NOTE, the current best source regularization coupled with the previous best-fit mass model
+        potential_correcter.pix_src_obj.source_inversion(potential_correcter.pix_mass_prev_iter, lam_s=potential_correcter.lam_s_this_iter, scale_s=potential_correcter.scale_s_this_iter)
+    except:
+        potential_correcter.pix_src_obj.source_inversion(potential_correcter.pix_mass_prev_iter, lam_s=potential_correcter.lam_s_this_iter)
     mapped_reconstructed_image_2d[~potential_correcter.grid_obj.mask_data] = np.copy(potential_correcter.pix_src_obj.mapped_reconstructed_image)
     vmin = np.percentile(mapped_reconstructed_image_2d,percent[0]) 
     vmax = np.percentile(mapped_reconstructed_image_2d,percent[1])

@@ -54,7 +54,7 @@ potential_corrector.initialize_iteration(
     lam_s_start=10, # the regualrization strength for the source; we manually increase this value to make the source smoother;
     # ensuring the`potential correction` algorithm can converge.
     lam_dpsi_start=1e9, # the regualrization strength for the lens potential
-    lam_dpsi_type='2nd', #the regularization type for the lens potential
+    dpsi_reg_type='2nd', #the regularization type for the lens potential
     psi_anchor_points=np.array([(-1.0,-1.0),(-1.0,1.0),(0.0,1.0)]), #the anchor points, which is used to remove the mass-sheet degeneracy; see sec-2.3 of our team document
     subhalo_fiducial_point=(1.25, 0.0), #the input true location of the subhalo
     save_fits=True,

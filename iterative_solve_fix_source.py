@@ -228,7 +228,8 @@ class IterativePotentialCorrectFixSource(IterativePotentialCorrect):
 
     
     def M_mat_from(self, pix_mass_obj):
-        self.M_mat = self.linear_mapping_mat_from(pix_mass_obj)
+        DSD_mat = self.DSD_matrix_from(pix_mass_obj)
+        self.M_mat = np.matmul(self._B_matrix, DSD_mat)
 
 
     def RTR_mat_from(self, lam_dpsi, scale_dpsi):

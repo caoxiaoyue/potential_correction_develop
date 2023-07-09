@@ -49,9 +49,10 @@ class IterativePotentialCorrect(object):
         niter=100, 
         lam_s_start=None, 
         lam_dpsi_start=1e9,
-        lam_dpsi_type='4th',
+        dpsi_reg_type='4th',
         psi_anchor_points=None,
         subhalo_fiducial_point=None,
+        output_dir='./result',
     ):
         """
         psi_2d_0: the lens potential map of the initial start mass model, typicall given by a macro model like elliptical power law model.
@@ -71,6 +72,7 @@ class IterativePotentialCorrect(object):
         self._psi_anchor_points = psi_anchor_points
         self._psi_2d_start = psi_2d_start
         self._psi_2d_start[self.masked_imaging.mask] = 0.0 #set the lens potential of masked pixels to 0
+        self._output_dir = output_dir
 
         #do iteration-0, the macro model
         self.count_iter = 0 #count the iteration number
@@ -98,6 +100,7 @@ class IterativePotentialCorrect(object):
         self.s_values_this_iter = np.copy(self._s_values_start) #src intentity of current iteration
         self.s_points_this_iter = np.copy(self._s_points_start)
         self.residual_this_iter = np.copy(self._residual_start)
+        self.pix_mass_prev_iter = copy.deepcopy(self.pix_mass_this_iter)
 
         #Init other auxiliary info
         self._psi_anchor_values = self.pix_mass_this_iter.eval_psi_at(self._psi_anchor_points)
@@ -119,15 +122,15 @@ class IterativePotentialCorrect(object):
         ) #the potential correction gradient operator, see the eq.8 in our document
         self._dpsi_grid_points = np.vstack([self.grid_obj.ygrid_dpsi_1d, self.grid_obj.xgrid_dpsi_1d]).T #points of sparse potential correction grid
         self._data_grid_points = np.vstack([self.grid_obj.ygrid_data_1d, self.grid_obj.xgrid_data_1d]).T
-        if lam_dpsi_type == '4th':
+        if dpsi_reg_type == '4th':
             self.grid_obj.get_diff_4th_reg_operator_dpsi()
             self._HTH_dpsi = np.matmul(self.grid_obj.Hx_dpsi_4th_reg.T, self.grid_obj.Hx_dpsi_4th_reg) + \
                 np.matmul(self.grid_obj.Hy_dpsi_4th_reg.T, self.grid_obj.Hy_dpsi_4th_reg)
-        elif lam_dpsi_type == '2nd':
+        elif dpsi_reg_type == '2nd':
             self.grid_obj.get_diff_2nd_reg_operator_dpsi()
             self._HTH_dpsi = np.matmul(self.grid_obj.Hx_dpsi_2nd_reg.T, self.grid_obj.Hx_dpsi_2nd_reg) + \
                 np.matmul(self.grid_obj.Hy_dpsi_2nd_reg.T, self.grid_obj.Hy_dpsi_2nd_reg)
-        elif lam_dpsi_type == 'gauss':
+        elif dpsi_reg_type == 'gauss':
             self.grid_obj.get_gauss_reg_operator_dpsi(scale=1.0)
             self._HTH_dpsi = self.grid_obj.gauss_reg_dpsi
             # print('xxxxxxxxxxxxxxxxxxxxxxxxx', np.linalg.slogdet(self._HTH_dpsi))
@@ -137,9 +140,10 @@ class IterativePotentialCorrect(object):
             #     np.log(np.diag(np.linalg.cholesky(self._HTH_dpsi)))
             # )
             # print('xxxxxxxxxxxxxxxxxxxxxxxxx', xx) 
-        elif lam_dpsi_type == 'exp':
-            self.grid_obj.get_exp_reg_operator_dpsi(scale=1.0)
-            self._HTH_dpsi = self.grid_obj.exp_reg_dpsi   
+        elif dpsi_reg_type == 'exp':
+            pass
+            # self.grid_obj.get_exp_reg_operator_dpsi(scale=1.0)
+            # self._HTH_dpsi = self.grid_obj.exp_reg_dpsi   
                     
         #calculate the merit of initial macro model. see eq.16 in our document 
         self._merit_start = self.merit_from(
@@ -153,8 +157,8 @@ class IterativePotentialCorrect(object):
         self._dpsi_map_coarse = [np.zeros_like(self.grid_obj.xgrid_dpsi)] #the potential correction map of iteration-0 is 0
 
         #visualize iteration-0
-        self.visualize_iteration(iter_num=self.count_iter)
-
+        self.visualize_iteration(basedir=self._output_dir, iter_num=self.count_iter)
+        
         #assign info of this iteration to the previous one
         self.update_iterations()
 
@@ -356,7 +360,7 @@ class IterativePotentialCorrect(object):
         self.pix_mass_this_iter = self.pixelized_mass_from(psi_2d_this_iter)
         
         #do visualization
-        self.visualize_iteration(iter_num=self.count_iter)
+        self.visualize_iteration(basedir=self._output_dir, iter_num=self.count_iter)
 
         #check convergence
         #todo, better to be s_{i} and psi_{i+1}?
