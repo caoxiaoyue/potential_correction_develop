@@ -87,6 +87,8 @@ class IterativePotentialCorrect(object):
         self._s_values_start = self.pix_src_obj.src_recontruct[:] #the intensity values of current best-fit pixelized source model
         self._s_points_start = np.copy(self.pix_src_obj.relocated_pixelization_grid) #the location of pixelized source grids (on source-plane).
         self._residual_start = self.image_data[~self.grid_obj.mask_data] - self.pix_src_obj.mapped_reconstructed_image
+        self._lam_s_start = self.lam_s_this_iter
+        self._scale_s_start = self.scale_s_this_iter
         self.s_values_this_iter = np.copy(self._s_values_start) #src intentity of current iteration
         self.s_points_this_iter = np.copy(self._s_points_start)
         self.residual_this_iter = np.copy(self._residual_start) #NOTE, this is the residual of pure source inversion given current best-fit mass model
@@ -331,6 +333,11 @@ class IterativePotentialCorrect(object):
         return -1.0*self.evidence()
 
 
+    def callback_reg_merit(self, xk, convergence):
+        self.history_params.append(xk)
+        self.history_merit.append(self.reg_merit(xk))
+
+
     def find_best_regularization(
         self, 
         log_lam_s_range=[-8, 8], 
@@ -342,10 +349,13 @@ class IterativePotentialCorrect(object):
         return the best-fit regularization strength given a ``fixed'' mass model (pixelized_mass_obj)
         log10_lam_range: set the log range of regularization strength. default: 10^-5 to 10^4 
         '''
+        self.history_params = []
+        self.history_merit = []
         t0 = time.time()
         self.best_fit_reg_info = differential_evolution(
             self.reg_merit, 
-            bounds=[log_lam_s_range, log_scale_s_range, log_lam_psi_range, log_scale_psi_range]
+            bounds=[log_lam_s_range, log_scale_s_range, log_lam_psi_range, log_scale_psi_range],
+            callback=self.callback_reg_merit,
         )
         t1 = time.time()
         print(f'time elapse of it-{self.count_iter} is: {t1-t0}')
@@ -356,15 +366,21 @@ class IterativePotentialCorrect(object):
         self.mp_ev = -1.0*self.best_fit_reg_info['fun'] #this is the corrpesonding evidence values
 
 
-    def run_this_iter(self):
+    def run_this_iter(
+        self,
+        log_lam_s_range=[-5, 8], 
+        log_scale_s_range=[-4, 4],
+        log_lam_psi_range=[-5, 15],
+        log_scale_psi_range=[-4, 4],
+        ):
         #find the best reg scale and strength by maximizing the evidence
         # only works for exp or gaussian form for both src and dpsi, need refactor; TODO
         self.M_mat = self.M_mat_from(self.pix_mass_prev_iter, self.s_points_prev_iter, self.s_values_prev_iter)
         self.find_best_regularization(
-            log_lam_s_range=[-5, 8], 
-            log_scale_s_range=[-4, 4],
-            log_lam_psi_range=[-5, 15],
-            log_scale_psi_range=[-4, 4],
+                log_lam_s_range, 
+                log_scale_s_range,
+                log_lam_psi_range,
+                log_scale_psi_range,
         )
         self.lam_s_this_iter = self.mp_lam_s
         self.scale_s_this_iter = self.mp_scale_s
@@ -378,6 +394,7 @@ class IterativePotentialCorrect(object):
             cal_M_mat=False,
         )
         self.info_from_inversion()
+        print(f'evidence value of this iteration-{self.count_iter}: {self.evidence()}')
 
         # NOTE, the current best source regularization coupled with the previous best-fit mass model
         # calculate the image residual of a pure source inversion
@@ -413,9 +430,20 @@ class IterativePotentialCorrect(object):
         # return False
 
 
-    def run_iter_solve(self):
+    def run_iter_solve(
+        self, 
+        log_lam_s_range=[-5, 8], 
+        log_scale_s_range=[-4, 4],
+        log_lam_psi_range=[-5, 15],
+        log_scale_psi_range=[-4, 4],
+        ):
         for ii in range(1, self._niter):
-            condition = self.run_this_iter()
+            condition = self.run_this_iter(
+                log_lam_s_range, 
+                log_scale_s_range,
+                log_lam_psi_range,
+                log_scale_psi_range,
+            )
             if condition:
                 print('------','code converge')
                 break
