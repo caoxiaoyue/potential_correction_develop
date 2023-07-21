@@ -105,7 +105,7 @@ class IterativePotentialCorrect(object):
         self._np = len(self.grid_obj.xgrid_dpsi_1d) #number dpsi grids
         self._d_1d = self.image_data[~self.grid_obj.mask_data] #1d unmasked image data
         self._n_1d = self.image_noise[~self.grid_obj.mask_data] #1d unmasked noise
-        self._dof = len(self._d_1d) - self._np - self._ns #number degrees of freedom
+        self._dof = len(self._d_1d) #- self._np - self._ns #number degrees of freedom
         self._B_matrix = np.copy(self.pix_src_obj.psf_blur_matrix) #psf bluring matrix, see eq.7 in our document
         self._Cf_matrix = np.copy(
             self.grid_obj.interp_matrix
@@ -118,10 +118,12 @@ class IterativePotentialCorrect(object):
         self._dpsi_grid_points = np.vstack([self.grid_obj.ygrid_dpsi_1d, self.grid_obj.xgrid_dpsi_1d]).T #points of sparse potential correction grid
         self._data_grid_points = np.vstack([self.grid_obj.ygrid_data_1d, self.grid_obj.xgrid_data_1d]).T
 
-        #a list which save the potential correction map
-        self._dpsi_map_coarse = [np.zeros_like(self.grid_obj.xgrid_dpsi)] #the potential correction map of iteration-0 is 0
-
-        self._diag_info = [self.ret_diag_info()]
+        #a list which save the info of each iteration
+        self._info_dict_tmp = {} #dict save the info of this iteration
+        self._info_dict_tmp['dpsi_map_coarse'] = np.zeros_like(self.grid_obj.xgrid_dpsi, dtype='float')
+        self._info_dict_tmp['factor'] = np.zeros(3)
+        self.append_other_info()
+        self.info_list = [self._info_dict_tmp] #a list save the info dict of all iteration
 
         #visualize iteration-0
         self.visualize_iteration(basedir=self._output_dir, iter_num=self.count_iter)
@@ -163,6 +165,7 @@ class IterativePotentialCorrect(object):
         self.pix_mass_this_iter = None
         self.s_values_this_iter = None
         self.s_points_this_iter = None
+        self._info_dict_tmp = {} #clean the info tmp dict
 
 
     def Ds_mat_from(self, pix_mass_obj, source_points, source_values):
@@ -288,9 +291,10 @@ class IterativePotentialCorrect(object):
         dpsi_map_coarse = np.zeros_like(self.grid_obj.xgrid_dpsi)
         dpsi_map_coarse[~self.grid_obj.mask_dpsi] = self.r_vec[self._ns:]
         dpsi_map_coarse = dpsi_map_coarse + factor[0]*self.grid_obj.ygrid_dpsi + factor[1]*self.grid_obj.xgrid_dpsi + factor[2]
-        self._dpsi_map_coarse.append(dpsi_map_coarse)
         #get pixelized mass object of this iteration
         self.pix_mass_this_iter = self.pixelized_mass_from(psi_2d_this_iter)
+
+        return factor, dpsi_map_coarse
 
 
     def evidence(self):
@@ -314,13 +318,13 @@ class IterativePotentialCorrect(object):
             self.r_vec.T, 
             np.matmul(self.reg_mat, self.r_vec),
         )
-        self.reg_qf_term = reg_r_term * (-0.5)
+        self.reg_qf_term = float(reg_r_term) * (-0.5)
 
         #chi2 term
         mapped_reconstructed_image_1d = np.matmul(self.M_mat, self.r_vec)
         residual_1d = (mapped_reconstructed_image_1d - self._d_1d)
         norm_residual_1d = residual_1d / self._n_1d
-        self.chi2_term = np.sum(norm_residual_1d**2) * (-0.5)
+        self.chi2_term = float(np.sum(norm_residual_1d**2)) * (-0.5)
 
         #evidence
         self.evidence_term = self.noise_term + self.log_det_curve_reg_term + self.log_det_reg_term + self.reg_qf_term + self.chi2_term
@@ -393,20 +397,27 @@ class IterativePotentialCorrect(object):
             self.scale_dpsi_this_iter,
             cal_M_mat=False,
         )
-        self.info_from_inversion()
-        print(f'evidence value of this iteration-{self.count_iter}: {self.evidence()}')
+        factor, dpsi_map_coarse = self.info_from_inversion() #this method append some info of this iteration to dict
 
         # NOTE, the current best source regularization coupled with the previous best-fit mass model
         # calculate the image residual of a pure source inversion
-        self.pix_src_obj.source_inversion( #can move out of here to improve speed
+        #the copy.deepcopy is for safety
+        pix_src_obj_tmp = copy.deepcopy(self.pix_src_obj)
+        pix_src_obj_tmp.source_inversion( 
             self.pix_mass_prev_iter, 
             lam_s=self.lam_s_this_iter,
             scale_s=self.scale_s_this_iter,
         )
-        self.residual_this_iter = copy.deepcopy(self.pix_src_obj.residual_map)
+        self.residual_this_iter = pix_src_obj_tmp.residual_map
 
-        #get diagnostics info for this iteration
-        self._diag_info.append(self.ret_diag_info())
+        #save the info for this iteration
+        self._info_dict_tmp['dpsi_map_coarse'] = np.copy(dpsi_map_coarse)
+        self._info_dict_tmp['factor'] = np.copy(factor)
+        #append other info for this iteration
+        self.append_other_info()
+        print(f'evidence value of this iteration-{self.count_iter}: {self.evidence()}---{-1.0*self.mp_ev}')
+
+        self.info_list.append(self._info_dict_tmp)
 
         #do visualization
         self.visualize_iteration(basedir=self._output_dir, iter_num=self.count_iter)
@@ -420,8 +431,8 @@ class IterativePotentialCorrect(object):
 
 
     def has_converged(self):
-        relative_change = (self._diag_info[-2]['image_rchi2'] - self._diag_info[-1]['image_rchi2'])/self._diag_info[-2]['image_rchi2']
-        print('previous VS current image_rchi2:', self._diag_info[-2]['image_rchi2'], self._diag_info[-1]['image_rchi2'], relative_change)
+        relative_change = (self.info_list[-2]['src_inv_image_rchi2'] - self.info_list[-1]['src_inv_image_rchi2'])/self.info_list[-2]['src_inv_image_rchi2']
+        print('previous VS current src_inv_image_rchi2:', self.info_list[-2]['src_inv_image_rchi2'], self.info_list[-1]['src_inv_image_rchi2'], relative_change)
 
         if (abs(relative_change) < 1e-8) and (self.count_iter>1):
             return True
@@ -456,20 +467,34 @@ class IterativePotentialCorrect(object):
         if not os.path.exists(basedir):  #check if path exist
             os.makedirs(abs_path) #create new directory recursively
 
-        it_plot.visualize_correction(
+        it_plot.visualize_correction_vkl(
             self, 
             basedir=basedir, 
             iter_num=iter_num,
         )
 
 
-    def ret_diag_info(self):
-        info_dict = {}
-        image_chi2 = (self.residual_this_iter/self._n_1d)**2
-        info_dict['image_chi2'] = float(np.sum(image_chi2))
-        info_dict['image_rchi2'] = float(info_dict['image_chi2']/self._dof)
+    def append_other_info(self):
+        self._info_dict_tmp['lam_s'] = self.lam_s_this_iter
+        self._info_dict_tmp['scale_s'] = self.scale_s_this_iter
+        self._info_dict_tmp['lam_dpsi'] = self.lam_dpsi_this_iter
+        self._info_dict_tmp['scale_dpsi'] = self.scale_dpsi_this_iter
+        self._info_dict_tmp['count_iter'] = self.count_iter
+        src_inv_image_chi2 = (self.residual_this_iter/self._n_1d)**2
+        self._info_dict_tmp['src_inv_image_chi2'] = float(np.sum(src_inv_image_chi2))
+        self._info_dict_tmp['src_inv_image_rchi2'] = float(self._info_dict_tmp['src_inv_image_chi2']/self._dof)
+        self._info_dict_tmp['s_values'] = np.copy(self.s_values_this_iter)
+        self._info_dict_tmp['s_points'] = np.copy(self.s_points_this_iter)
+        self._info_dict_tmp['psi_2d_this_iter'] = np.copy(self.pix_mass_this_iter.psi_map)
 
-        try:
+        if self.count_iter > 0:
+            self._info_dict_tmp['evidence'] = self.evidence()
+            self._info_dict_tmp['noise_term'] = self.noise_term
+            self._info_dict_tmp['log_det_curve_reg_term'] = self.log_det_curve_reg_term
+            self._info_dict_tmp['log_det_reg_term'] = self.log_det_reg_term
+            self._info_dict_tmp['reg_qf_term'] = self.reg_qf_term
+            self._info_dict_tmp['chi2_term'] = self.chi2_term
+
             this_reg_mat = self.reg_mat[0:self._ns, 0:self._ns]
             s_quadratic = np.matmul(
                 self.s_values_this_iter.T, 
@@ -478,15 +503,10 @@ class IterativePotentialCorrect(object):
                     self.s_values_this_iter
                 )
             )
-        except Exception as e:
-            print(e)
-            s_quadratic = 0
-        finally:
-            info_dict['s_quadratic'] = float(s_quadratic)
+            self._info_dict_tmp['s_qf'] = float(s_quadratic)
 
-        try:
             this_reg_mat = self.reg_mat[self._ns:, self._ns:]
-            dpsi_1d = self._dpsi_map_coarse[-1][~self.grid_obj.mask_dpsi]
+            dpsi_1d = self._info_dict_tmp['dpsi_map_coarse'][~self.grid_obj.mask_dpsi]
             dpsi_quadratic = np.matmul(
                 dpsi_1d.T, 
                 np.matmul(
@@ -494,14 +514,7 @@ class IterativePotentialCorrect(object):
                     dpsi_1d
                 )
             )
-        except Exception as e:
-            print(e)
-            dpsi_quadratic = 0
-        finally:
-            info_dict['dpsi_quadratic'] = float(dpsi_quadratic)
-
-        info_dict['total_penalty'] = info_dict['image_chi2'] + info_dict['s_quadratic'] + info_dict['dpsi_quadratic']
-        return info_dict
+            self._info_dict_tmp['dpsi_qf'] = float(dpsi_quadratic)
 
 
     def rescale_lens_potential(self, psi_2d_in):
