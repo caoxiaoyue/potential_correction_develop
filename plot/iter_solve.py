@@ -2,6 +2,8 @@ from matplotlib import pyplot as plt
 from plot import pixelized_source as ps_plot
 import copy
 import numpy as np
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 def visualize_correction(potential_correcter, basedir='./result', iter_num=0):
     plt.figure(figsize=(15, 15))
@@ -398,12 +400,7 @@ def visualize_correction_vkl(potential_correcter, basedir='./result', iter_num=0
     #---------model reconstruction given current mass model
     plt.subplot(333)
     mapped_reconstructed_image_2d = np.zeros_like(potential_correcter.image_data)
-    try:
-        #NOTE, the current best source regularization coupled with the previous best-fit mass model
-        potential_correcter.pix_src_obj.source_inversion(potential_correcter.pix_mass_prev_iter, lam_s=potential_correcter.lam_s_this_iter, scale_s=potential_correcter.scale_s_this_iter)
-    except:
-        potential_correcter.pix_src_obj.source_inversion(potential_correcter.pix_mass_prev_iter, lam_s=potential_correcter.lam_s_this_iter)
-    mapped_reconstructed_image_2d[~potential_correcter.grid_obj.mask_data] = np.copy(potential_correcter.pix_src_obj.mapped_reconstructed_image)
+    mapped_reconstructed_image_2d[~potential_correcter.grid_obj.mask_data] = np.copy(potential_correcter.model_image)
     vmin = np.percentile(mapped_reconstructed_image_2d,percent[0]) 
     vmax = np.percentile(mapped_reconstructed_image_2d,percent[1])
     mapped_reconstructed_image_2d = np.ma.masked_array(
@@ -421,7 +418,7 @@ def visualize_correction_vkl(potential_correcter, basedir='./result', iter_num=0
     #----------normalized residual
     plt.subplot(334)
     norm_residual_map_2d = np.zeros_like(potential_correcter.image_data)
-    norm_residual_map_2d[~potential_correcter.grid_obj.mask_data] = np.copy(potential_correcter.pix_src_obj.norm_residual_map)
+    norm_residual_map_2d[~potential_correcter.grid_obj.mask_data] = np.copy(potential_correcter.residual_this_iter/potential_correcter._n_1d)
     vmin = np.percentile(norm_residual_map_2d,percent[0]) 
     vmax = np.percentile(norm_residual_map_2d,percent[1])
     norm_residual_map_2d = np.ma.masked_array(
@@ -441,8 +438,8 @@ def visualize_correction_vkl(potential_correcter, basedir='./result', iter_num=0
     plt.subplot(335)
     this_ax = plt.gca()
     ps_plot.visualize_source(
-        potential_correcter.pix_src_obj.relocated_pixelization_grid, 
-        potential_correcter.pix_src_obj.src_recontruct[:] ,
+        potential_correcter.s_points_this_iter, 
+        potential_correcter.s_values_this_iter,
         ax=this_ax,
     )
     this_ax.set_title('Source')
@@ -528,3 +525,82 @@ def visualize_correction_vkl(potential_correcter, basedir='./result', iter_num=0
     plt.tight_layout()
     plt.savefig(f'{basedir}/{iter_num}.jpg', bbox_inches='tight')
     plt.close()
+
+
+
+def plot_dpsi(potential_corrector, ax=None):
+    # cbpar = {}
+    # cbpar['fraction'] = 0.046
+    # cbpar['pad'] = 0.04
+    cmap = copy.copy(plt.get_cmap('jet'))
+    cmap.set_bad(color='white')
+    myargs_data = {'origin':'upper'}
+    myargs_data['cmap'] = cmap
+    myargs_data['extent'] = copy.copy(potential_corrector.grid_obj.data_bound)
+    myargs_dpsi = copy.deepcopy(myargs_data)
+    myargs_dpsi['extent'] = copy.copy(potential_corrector.grid_obj.dpsi_bound)
+    markersize = 10
+
+    rgrid = np.sqrt(potential_corrector.grid_obj.xgrid_data**2 + potential_corrector.grid_obj.ygrid_data**2)
+    limit = np.max(rgrid[~potential_corrector.grid_obj.mask_data])
+
+    psi_correct_this_iter =  np.asarray(potential_corrector.info_list[-1]['dpsi_map_coarse'])
+    masked_psi_correct_this_iter = np.ma.masked_array(
+        psi_correct_this_iter, 
+        mask=potential_corrector.grid_obj.mask_dpsi
+    )
+
+    im = ax.imshow(masked_psi_correct_this_iter,**myargs_dpsi)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    # cb=plt.colorbar(**cbpar)
+    cb = plt.colorbar(im, cax=cax)
+    cb.ax.minorticks_on()
+    cb.ax.tick_params(labelsize='small')
+    ax.plot(potential_corrector._psi_anchor_points[:,1], potential_corrector._psi_anchor_points[:,0], 'k+', ms=markersize)
+
+    ax.set_xlim(-1.0*limit, limit) 
+    ax.set_ylim(-1.0*limit, limit)
+    ax.set_xlabel('Arcsec')
+    ax.set_ylabel('Arcsec')
+    ax.set_title(r'$\delta \psi$')
+
+
+def plot_dkappa(potential_corrector, ax=None):
+    cmap = copy.copy(plt.get_cmap('jet'))
+    cmap.set_bad(color='white')
+    myargs_data = {'origin':'upper'}
+    myargs_data['cmap'] = cmap
+    myargs_data['extent'] = copy.copy(potential_corrector.grid_obj.data_bound)
+    myargs_dpsi = copy.deepcopy(myargs_data)
+    myargs_dpsi['extent'] = copy.copy(potential_corrector.grid_obj.dpsi_bound)
+    markersize = 10
+
+    rgrid = np.sqrt(potential_corrector.grid_obj.xgrid_data**2 + potential_corrector.grid_obj.ygrid_data**2)
+    limit = np.max(rgrid[~potential_corrector.grid_obj.mask_data])
+
+    kappa_correct_this_iter =  np.zeros_like(potential_corrector.grid_obj.mask_dpsi, dtype='float')
+    psi_correct_this_iter =  np.asarray(potential_corrector.info_list[-1]['dpsi_map_coarse'])
+    kappa_correct_this_iter_1d = np.matmul(
+        potential_corrector.grid_obj.hamiltonian_dpsi,
+        psi_correct_this_iter[~potential_corrector.grid_obj.mask_dpsi]
+    )
+    kappa_correct_this_iter[~potential_corrector.grid_obj.mask_dpsi] = kappa_correct_this_iter_1d
+    masked_kappa_correct_this_iter = np.ma.masked_array(
+        kappa_correct_this_iter, 
+        mask=potential_corrector.grid_obj.mask_dpsi
+    )
+
+    im = ax.imshow(masked_kappa_correct_this_iter,**myargs_dpsi)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cb = plt.colorbar(im, cax=cax)
+    cb.ax.minorticks_on()
+    cb.ax.tick_params(labelsize='small')
+    ax.plot(potential_corrector._psi_anchor_points[:,1], potential_corrector._psi_anchor_points[:,0], 'k+', ms=markersize)
+
+    ax.set_xlim(-1.0*limit, limit) 
+    ax.set_ylim(-1.0*limit, limit)
+    ax.set_xlabel('Arcsec')
+    ax.set_ylabel('Arcsec')
+    ax.set_title(r'$\delta \kappa$')

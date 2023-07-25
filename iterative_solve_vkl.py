@@ -86,12 +86,14 @@ class IterativePotentialCorrect(object):
         #Note: self.s_points_this_iter are given in autolens [(y1,x1),(y2,x2),...] order
         self._s_values_start = self.pix_src_obj.src_recontruct[:] #the intensity values of current best-fit pixelized source model
         self._s_points_start = np.copy(self.pix_src_obj.relocated_pixelization_grid) #the location of pixelized source grids (on source-plane).
-        self._residual_start = self.image_data[~self.grid_obj.mask_data] - self.pix_src_obj.mapped_reconstructed_image
+        self.model_image = np.copy(self.pix_src_obj.mapped_reconstructed_image) #pure source inversion gives the model image
+        self._residual_start = self.image_data[~self.grid_obj.mask_data] - self.model_image
         self._lam_s_start = self.lam_s_this_iter
         self._scale_s_start = self.scale_s_this_iter
         self.s_values_this_iter = np.copy(self._s_values_start) #src intentity of current iteration
         self.s_points_this_iter = np.copy(self._s_points_start)
         self.residual_this_iter = np.copy(self._residual_start) #NOTE, this is the residual of pure source inversion given current best-fit mass model
+        self.residual_pure_src = np.copy(self.residual_this_iter)
 
         #Init other auxiliary info
         self.lam_dpsi_this_iter = None #init the regularization parameters for the potential correction
@@ -269,6 +271,10 @@ class IterativePotentialCorrect(object):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             self.r_vec = linalg.solve(self.curve_reg_mat, data_vec)
+    
+        self.model_image = np.matmul(self.M_mat, self.r_vec)
+        self.residual_1d = self._d_1d - self.model_image
+        self.norm_residual_1d = self.residual_1d / self._n_1d
 
 
     def info_from_inversion(self):
@@ -321,10 +327,7 @@ class IterativePotentialCorrect(object):
         self.reg_qf_term = float(reg_r_term) * (-0.5)
 
         #chi2 term
-        mapped_reconstructed_image_1d = np.matmul(self.M_mat, self.r_vec)
-        residual_1d = (mapped_reconstructed_image_1d - self._d_1d)
-        norm_residual_1d = residual_1d / self._n_1d
-        self.chi2_term = float(np.sum(norm_residual_1d**2)) * (-0.5)
+        self.chi2_term = float(np.sum(self.norm_residual_1d**2)) * (-0.5)
 
         #evidence
         self.evidence_term = self.noise_term + self.log_det_curve_reg_term + self.log_det_reg_term + self.reg_qf_term + self.chi2_term
@@ -397,6 +400,7 @@ class IterativePotentialCorrect(object):
             self.scale_dpsi_this_iter,
             cal_M_mat=False,
         )
+        self.residual_this_iter = np.copy(self.residual_1d)
         factor, dpsi_map_coarse = self.info_from_inversion() #this method append some info of this iteration to dict
 
         # NOTE, the current best source regularization coupled with the previous best-fit mass model
@@ -408,7 +412,7 @@ class IterativePotentialCorrect(object):
             lam_s=self.lam_s_this_iter,
             scale_s=self.scale_s_this_iter,
         )
-        self.residual_this_iter = pix_src_obj_tmp.residual_map
+        self.residual_pure_src = pix_src_obj_tmp.residual_map
 
         #save the info for this iteration
         self._info_dict_tmp['dpsi_map_coarse'] = np.copy(dpsi_map_coarse)
@@ -480,7 +484,7 @@ class IterativePotentialCorrect(object):
         self._info_dict_tmp['lam_dpsi'] = self.lam_dpsi_this_iter
         self._info_dict_tmp['scale_dpsi'] = self.scale_dpsi_this_iter
         self._info_dict_tmp['count_iter'] = self.count_iter
-        src_inv_image_chi2 = (self.residual_this_iter/self._n_1d)**2
+        src_inv_image_chi2 = (self.residual_pure_src/self._n_1d)**2
         self._info_dict_tmp['src_inv_image_chi2'] = float(np.sum(src_inv_image_chi2))
         self._info_dict_tmp['src_inv_image_rchi2'] = float(self._info_dict_tmp['src_inv_image_chi2']/self._dof)
         self._info_dict_tmp['s_values'] = np.copy(self.s_values_this_iter)
