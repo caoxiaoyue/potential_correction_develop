@@ -28,6 +28,8 @@ def visualize_correction(potential_correcter, basedir='./result', iter_num=0):
     masked_SN_data = np.ma.masked_array(potential_correcter.image_data/potential_correcter.image_noise, mask=potential_correcter.grid_obj.mask_data)
     plt.imshow(masked_SN_data, **myargs_data)
     plt.plot(potential_correcter._psi_anchor_points[:,1], potential_correcter._psi_anchor_points[:,0], 'k+', ms=markersize)
+    if potential_correcter._subhalo_fiducial_point is not None:
+        plt.plot(potential_correcter._subhalo_fiducial_point[1], potential_correcter._subhalo_fiducial_point[0], 'k*', ms=markersize)
     cb=plt.colorbar(**cbpar)
     cb.ax.minorticks_on()
     cb.ax.tick_params(labelsize='small')
@@ -108,6 +110,8 @@ def visualize_correction(potential_correcter, basedir='./result', iter_num=0):
     )
     plt.imshow(masked_psi_correct_this_iter,**myargs_dpsi)
     plt.plot(potential_correcter._psi_anchor_points[:,1], potential_correcter._psi_anchor_points[:,0], 'k+', ms=markersize)
+    if potential_correcter._subhalo_fiducial_point is not None:
+        plt.plot(potential_correcter._subhalo_fiducial_point[1], potential_correcter._subhalo_fiducial_point[0], 'k*', ms=markersize)
     cb=plt.colorbar(**cbpar)
     cb.ax.minorticks_on()
     cb.ax.tick_params(labelsize='small')
@@ -147,6 +151,8 @@ def visualize_correction(potential_correcter, basedir='./result', iter_num=0):
     )
     plt.imshow(masked_cumulative_psi_correct,**myargs_dpsi)
     plt.plot(potential_correcter._psi_anchor_points[:,1], potential_correcter._psi_anchor_points[:,0], 'k+', ms=markersize)
+    if potential_correcter._subhalo_fiducial_point is not None:
+        plt.plot(potential_correcter._subhalo_fiducial_point[1], potential_correcter._subhalo_fiducial_point[0], 'k*', ms=markersize)
     cb=plt.colorbar(**cbpar)
     cb.ax.minorticks_on()
     cb.ax.tick_params(labelsize='small')
@@ -205,6 +211,8 @@ def visualize_correction_true_src(potential_correcter, basedir='./result', iter_
     masked_SN_data = np.ma.masked_array(potential_correcter.image_data/potential_correcter.image_noise, mask=potential_correcter.grid_obj.mask_data)
     plt.imshow(masked_SN_data, **myargs_data)
     plt.plot(potential_correcter._psi_anchor_points[:,1], potential_correcter._psi_anchor_points[:,0], 'k+', ms=markersize)
+    if potential_correcter._subhalo_fiducial_point is not None:
+        plt.plot(potential_correcter._subhalo_fiducial_point[1], potential_correcter._subhalo_fiducial_point[0], 'k*', ms=markersize)
     cb=plt.colorbar(**cbpar)
     cb.ax.minorticks_on()
     cb.ax.tick_params(labelsize='small')
@@ -280,6 +288,8 @@ def visualize_correction_true_src(potential_correcter, basedir='./result', iter_
     )
     plt.imshow(masked_psi_correct_this_iter,**myargs_dpsi)
     plt.plot(potential_correcter._psi_anchor_points[:,1], potential_correcter._psi_anchor_points[:,0], 'k+', ms=markersize)
+    if potential_correcter._subhalo_fiducial_point is not None:
+        plt.plot(potential_correcter._subhalo_fiducial_point[1], potential_correcter._subhalo_fiducial_point[0], 'k*', ms=markersize)
     cb=plt.colorbar(**cbpar)
     cb.ax.minorticks_on()
     cb.ax.tick_params(labelsize='small')
@@ -319,6 +329,8 @@ def visualize_correction_true_src(potential_correcter, basedir='./result', iter_
     )
     plt.imshow(masked_cumulative_psi_correct,**myargs_dpsi)
     plt.plot(potential_correcter._psi_anchor_points[:,1], potential_correcter._psi_anchor_points[:,0], 'k+', ms=markersize)
+    if potential_correcter._subhalo_fiducial_point is not None:
+        plt.plot(potential_correcter._subhalo_fiducial_point[1], potential_correcter._subhalo_fiducial_point[0], 'k*', ms=markersize)
     cb=plt.colorbar(**cbpar)
     cb.ax.minorticks_on()
     cb.ax.tick_params(labelsize='small')
@@ -377,6 +389,8 @@ def visualize_correction_vkl(potential_correcter, basedir='./result', iter_num=0
     masked_SN_data = np.ma.masked_array(potential_correcter.image_data/potential_correcter.image_noise, mask=potential_correcter.grid_obj.mask_data)
     plt.imshow(masked_SN_data, **myargs_data)
     plt.plot(potential_correcter._psi_anchor_points[:,1], potential_correcter._psi_anchor_points[:,0], 'k+', ms=markersize)
+    if potential_correcter._subhalo_fiducial_point is not None:
+        plt.plot(potential_correcter._subhalo_fiducial_point[1], potential_correcter._subhalo_fiducial_point[0], 'k*', ms=markersize)
     cb=plt.colorbar(**cbpar)
     cb.ax.minorticks_on()
     cb.ax.tick_params(labelsize='small')
@@ -452,6 +466,8 @@ def visualize_correction_vkl(potential_correcter, basedir='./result', iter_num=0
     )
     plt.imshow(masked_psi_correct_this_iter,**myargs_dpsi)
     plt.plot(potential_correcter._psi_anchor_points[:,1], potential_correcter._psi_anchor_points[:,0], 'k+', ms=markersize)
+    if potential_correcter._subhalo_fiducial_point is not None:
+        plt.plot(potential_correcter._subhalo_fiducial_point[1], potential_correcter._subhalo_fiducial_point[0], 'k*', ms=markersize)
     cb=plt.colorbar(**cbpar)
     cb.ax.minorticks_on()
     cb.ax.tick_params(labelsize='small')
@@ -492,6 +508,8 @@ def visualize_correction_vkl(potential_correcter, basedir='./result', iter_num=0
     )
     plt.imshow(masked_cumulative_psi_correct,**myargs_dpsi)
     plt.plot(potential_correcter._psi_anchor_points[:,1], potential_correcter._psi_anchor_points[:,0], 'k+', ms=markersize)
+    if potential_correcter._subhalo_fiducial_point is not None:
+        plt.plot(potential_correcter._subhalo_fiducial_point[1], potential_correcter._subhalo_fiducial_point[0], 'k*', ms=markersize)
     cb=plt.colorbar(**cbpar)
     cb.ax.minorticks_on()
     cb.ax.tick_params(labelsize='small')

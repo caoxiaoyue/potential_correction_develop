@@ -1,6 +1,6 @@
 import autolens as al
 import numpy as np
-import grid_util
+from grid.sparse_grid import SparseDpsiGrid
 import pixelized_mass
 import pixelized_source
 import potential_correction_util as pcu
@@ -30,7 +30,7 @@ class IterativePotentialCorrect(object):
 
         if shape_2d_dpsi is None:
             shape_2d_dpsi = self.image_data.shape
-        self.grid_obj = grid_util.SparseDpsiGrid(image_mask, dpix_data, shape_2d_dpsi=shape_2d_dpsi) #Note, mask_data has not been cleaned
+        self.grid_obj = SparseDpsiGrid(image_mask, dpix_data, shape_2d_dpsi=shape_2d_dpsi) #Note, mask_data has not been cleaned
 
         self.shape_2d_src = shape_2d_src
 

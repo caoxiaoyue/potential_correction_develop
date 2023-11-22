@@ -6,13 +6,27 @@ from scipy.optimize import differential_evolution
 import time
 
 class PixelizedSource(object):
-    def __init__(self, masked_imaging, pixelization_shape_2d=(30,30), reg_type='gradient'):
+    def __init__(self, masked_imaging, pixelization_shape_2d=(30,30), fraction=0.5, reg_type='gradient', pix_type='default'):
         self.masked_imaging = masked_imaging
-        self.pixelization_shape = pixelization_shape_2d
 
-        self.sparse_image_plane_grid = al.Grid2DSparse.from_grid_and_unmasked_2d_grid_shape(
-            grid=self.masked_imaging.grid, unmasked_sparse_shape=self.pixelization_shape
-        ) #sparse pixelized source grid on image-plane
+        if pix_type == 'default':
+            self.pixelization_shape = pixelization_shape_2d
+            self.sparse_image_plane_grid = al.Grid2DSparse.from_grid_and_unmasked_2d_grid_shape(
+                grid=self.masked_imaging.grid, unmasked_sparse_shape=self.pixelization_shape
+            ) #sparse pixelized source grid on image-plane
+        elif pix_type == 'adpt':
+            self.fraction = fraction
+            data = masked_imaging.data.native
+            feature_indices = np.where(~masked_imaging.mask)
+            npix_features = len(masked_imaging.data)
+            used_pixels, used_pixels_mask = select_used_pixels(data, feature_indices, int(npix_features*self.fraction))
+            sparse_image_plane_points = np.zeros((int(npix_features*self.fraction), 2))
+            ygrid =  masked_imaging.grid.unmasked_grid.binned.native[:,:,0]
+            xgrid =  masked_imaging.grid.unmasked_grid.binned.native[:,:,1]
+            sparse_image_plane_points[:,0] = ygrid[used_pixels]
+            sparse_image_plane_points[:,1] = xgrid[used_pixels]
+            sparse_index_for_slim_index = pair_image_and_sparse_grid(masked_imaging.grid, sparse_image_plane_points)
+            self.sparse_image_plane_grid = al.Grid2DSparse(sparse_image_plane_points, sparse_index_for_slim_index=sparse_index_for_slim_index)
 
         self.image_data = self.masked_imaging.image.native
         self.image_noise = self.masked_imaging.noise_map.native
@@ -286,3 +300,82 @@ class PixelizedSource(object):
             self.reg_lam_err = (self.reg_lam_high - self.reg_lam_low)/2.0
             self.reg_scale_err = (self.reg_scale_high - self.reg_scale_low)/2.0
 
+
+
+def n_max(arr, n):
+	'''
+	return the indices of n max values in arr array
+	'''
+	indices_mask=arr.ravel().argsort()[-n:]
+	indices=np.unravel_index(indices_mask, arr.shape)
+	return indices
+
+def select_used_pixels(data, feature_indices, npix, scheme=0):
+	'''
+	data: the 2d image
+	feature_indices: the indices (results of np.where) of lensed arc region
+	npix: how many source pixel are used for reconstruction
+	scheme: which source pixel scheme you want to used
+
+	return:
+	used_pixels: a tuple which save the indices of pixels which are used for source reconstruction
+	used_pixels_mask: a 1d lensed feature mask array (such as [0,0,0,1,1,....]), the pixels which are used for source reconstruction are
+	set to 1 in this 1d feature mask array
+	'''
+	if scheme == 0: # select the m boundary pixel and n-m brightest pixels
+		mask_2d=np.zeros_like(data)
+		mask_2d[feature_indices]=1.
+		used_pixels_mask=np.zeros(feature_indices[0].shape[0], dtype=int) #if 1, that pixel are used for source reconstruction
+		# identify all the pixels in the boundary for inversion
+		bnd_pixels_x=np.array([], dtype=int)
+		bnd_pixels_y=np.array([], dtype=int)
+		for i in range(feature_indices[0].shape[0]):
+			try:
+				tmp=mask_2d[feature_indices[0][i]-1, feature_indices[1][i]]*mask_2d[feature_indices[0][i], feature_indices[1][i]+1]*mask_2d[feature_indices[0][i]+1, feature_indices[1][i]]*mask_2d[feature_indices[0][i], feature_indices[1][i]-1]
+			except:
+				tmp=0
+			if tmp == 0:
+				used_pixels_mask[i]=1
+				bnd_pixels_x=np.append(bnd_pixels_x, feature_indices[0][i])
+				bnd_pixels_y=np.append(bnd_pixels_y, feature_indices[1][i])
+		
+		# select the other brightest n-bnd_pixels_x.shape[0] pixels used for inversion	
+		junk=data.copy()
+		junk[bnd_pixels_x, bnd_pixels_y]=0.0
+		bright_pixels=n_max(junk*mask_2d, npix-bnd_pixels_x.shape[0])
+		used_pixels_mask[(junk*mask_2d)[feature_indices].ravel().argsort()[-(npix-bnd_pixels_x.shape[0]):]]=1
+		used_pixels=(np.append(bnd_pixels_x, bright_pixels[0]), np.append(bnd_pixels_y, bright_pixels[1]))
+
+	elif scheme == 1: # select every other pixel
+		used_pixels_mask=np.zeros(feature_indices[0].shape[0], dtype=int)
+		used_pixels_x=np.array([], dtype=int)	
+		used_pixels_y=np.array([], dtype=int)	
+		for i in range(feature_indices[0].shape[0]):
+			if (i % 2 == 0):
+				used_pixels_x=np.append(used_pixels_x, feature_indices[0][i])
+				used_pixels_y=np.append(used_pixels_y, feature_indices[1][i])
+				used_pixels_mask[i]=1
+		used_pixels=(used_pixels_x, used_pixels_y)
+	return (used_pixels, used_pixels_mask)
+
+
+from numba import njit
+@njit
+def pair_image_and_sparse_grid(points_image, points_sparse):
+    sparse_index_for_slim_index = np.zeros(points_image.shape[0], dtype='int')
+
+    for id_image in range(points_image.shape[0]):
+        x_im = points_image[id_image, 1]
+        y_im = points_image[id_image, 0]
+
+        r2_this = 1000000
+        for id_sparse in range(points_sparse.shape[0]):
+            x_sp = points_sparse[id_sparse, 1]
+            y_sp = points_sparse[id_sparse, 0]
+            r2_tmp = (x_im-x_sp)**2 + (y_im-y_sp)**2
+
+            if r2_tmp < r2_this:
+                r2_this = r2_tmp
+                sparse_index_for_slim_index[id_image] = id_sparse
+        
+    return sparse_index_for_slim_index

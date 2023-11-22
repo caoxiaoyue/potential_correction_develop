@@ -18,20 +18,34 @@ import warnings
 
 
 class IterativePotentialCorrect(object):
-    def __init__(self, masked_imaging, shape_2d_dpsi=None, shape_2d_src=(50,50), sub_size=4):
+    def __init__(
+            self, 
+            masked_imaging, 
+            dpsi_reg_type='4th',
+            shape_2d_dpsi=None, 
+            s_reg_type='gradient',
+            s_pix_type='adpt', #'default', 'adpt'
+            shape_2d_src=(50,50), 
+            fraction_src=0.5, 
+            sub_size=4
+        ):
         """
         shape_2d_dpsi: the shape of potential correction grid, if not set, this will be set to the lens image shape
         shape_2d_src: the number of grid used for source reconstruction (defined on image-plane)
         """
         self.masked_imaging = masked_imaging #include grid, mask, image, noise, psf etc
+        self._s_reg_type = s_reg_type
+        self._dpsi_reg_type = dpsi_reg_type
+        self._s_pix_type = s_pix_type
+        self._shape_2d_src = shape_2d_src
+        self._fraction_src = fraction_src
+        self._sub_size = sub_size
 
         self.image_data = self.masked_imaging.image.native #native image resolution, not the oversanpling one
         self.image_noise = self.masked_imaging.noise_map.native
         self.psf_kernel =  self.masked_imaging.psf.native
         image_mask = self.masked_imaging.mask 
         dpix_data = self.masked_imaging.pixel_scales[0]
-
-        self.sub_size = sub_size
 
         if shape_2d_dpsi is None:
             shape_2d_dpsi = self.image_data.shape
@@ -40,25 +54,19 @@ class IterativePotentialCorrect(object):
         image_mask = al.Mask2D(mask=self.grid_obj.mask_data, pixel_scales=(dpix_data, dpix_data))
         self.masked_imaging = self.masked_imaging.apply_mask(mask=image_mask) #since mask are cleaned, re-apply it to autolens imaging object
         self.masked_imaging = self.masked_imaging.apply_settings(
-            settings=al.SettingsImaging(sub_size=self.sub_size, sub_size_inversion=self.sub_size)
+            settings=al.SettingsImaging(sub_size=self._sub_size, sub_size_inversion=self._sub_size)
         )
-
-        self.shape_2d_src = shape_2d_src
 
 
     def initialize_iteration(
         self, 
         psi_2d_start=None, 
         niter=100, 
-        s_reg_type='gradient',
-        dpsi_reg_type='4th',
         psi_anchor_points=None,
         subhalo_fiducial_point=None,
         output_dir='./result'
     ):
         self._niter = niter
-        self._s_reg_type = s_reg_type
-        self._dpsi_reg_type = dpsi_reg_type
         self._psi_anchor_points = psi_anchor_points
         self._psi_2d_start = psi_2d_start
         self._psi_2d_start[self.masked_imaging.mask] = 0.0 #set the lens potential of masked pixels to 0
@@ -71,8 +79,10 @@ class IterativePotentialCorrect(object):
         #3---------pix src obj is mainly used for evalulating lens mapping matrix given a lens mass model
         self.pix_src_obj = pixelized_source.PixelizedSource(
             self.masked_imaging, 
-            pixelization_shape_2d=self.shape_2d_src,
+            pixelization_shape_2d=self._shape_2d_src,
+            fraction=self._fraction_src,
             reg_type=self._s_reg_type,
+            pix_type=self._s_pix_type,
         )
         self.pix_src_obj.find_best_regularization(self.pix_mass_this_iter, log10_lam_range=[-4, 4], log10_scale_range=[-3, 3])
         self.lam_s_this_iter = self.pix_src_obj.mp_lam
